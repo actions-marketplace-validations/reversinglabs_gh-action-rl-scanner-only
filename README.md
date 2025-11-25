@@ -10,7 +10,7 @@ If you're looking for a solution with more functionality out-of-the-box, try the
 
 ## What is rl-secure?
 
-`rl-secure` is a CLI tool that's part of the [secure.software platform](https://www.secure.software/) - a new ReversingLabs solution for software supply chain protection.
+`rl-secure` is a CLI tool that's part of the [Spectra Assure platform](https://www.reversinglabs.com/products/software-supply-chain-security) - a new ReversingLabs solution for software supply chain protection.
 
 With `rl-secure`, you can:
 
@@ -73,12 +73,55 @@ Users must then encode the license file with the Base64 algorithm.
 The Base64-encoded license string and the site key must be provided to the action using [environment variables](#environment-variables).
 
 
+### Configure a package store
+
+A package store is a special directory where `rl-secure` can permanently keep your analyzed build artifacts and their scan results.
+When created, a package store is automatically organized into [a predefined structure](https://docs.secure.software/cli/commands/create#example-structure-of-a-package-store) where every analyzed artifact is registered as a **package version** and assigned a **package URL (purl)** in the format `[pkg:type/]<project></package><@version>`.
+
+A package store is a prerequisite for [comparing build artifacts](#compare-artifacts) because the diff scan requires specifying artifacts by their package URLs and saving analysis results for each artifacts.
+
+To configure a package store, use the `rl-store` parameter. This requires either a path on the runner (if only one runner is used) or a shared storage location with NFS or CIFS (if scanning will be performed on multiple runners). **Configuring a package store only make sense on self-hosted runners.**
+
+When a package store is configured, you must provide the package URL (purl) with the `rl-package-url` parameter when scanning an artifact to register it in the package store.
+Likewise, if you want to use the `rl-package-url` parameter, you must also set the `rl-store`.
+
+
+### Compare artifacts
+
+The `rl-secure` CLI and the `rl-scanner` Docker image both allow comparing the analysis results of two artifacts in the same `<project>/<package>` context.
+This comparison is also known as the **diff scan**.
+
+To perform a diff scan, `rl-secure` needs to preserve the results of previous scans in a package store.
+When using a package store, analysis results for every scanned artifact are accessible with the package URL in the format `<project>/<package>@<version>`.
+This lets you compare the scan results of an artifact against a previously scanned artifact in the same project and package.
+
+To compare artifacts, use the `rl-diff-with` parameter when scanning an artifact to specify the package URL of a previous version to compare against.
+The diff scan action will verify that the requested version was actually scanned before, and ignore the request for a diff scan if there are no results for the requested `<project>/<package>@<version>`.
+
+
+### Optional proxy configuration
+
+In some cases, proxy configuration may be needed to deploy and use `rl-secure`.
+You can configure proxy settings with the `rl-proxy-*` parameters for any self-hosted runner, including local GitHub Enterprise setups.
+
+When using the `rl-proxy-server` parameter, you must also specify the port with `rl-proxy-port`.
+
+If the proxy requires authentication, the proxy credentials for authentication can be configured with `rl-proxy-user` and `rl-proxy-password`.
+
 ### Inputs
 
 | Input parameter | Required | Description |
 | :--------- | :------ | :------ |
 | `artifact-to-scan` | Yes | The software package (build artifact) you want to scan. Provide the artifact file path relative to the `github.workspace` |
 | `report-path` | No | The directory where the action will store analysis reports for the build artifact. The directory must be empty. Provide the directory path relative to the `github.workspace`. Default value is `MyReportDir` |
+| `rl-store` | No | If using a package store, use this parameter to provide the path to a directory where the package store has been initialized.  |
+| `rl-package-url` | No | If using a package store, use this parameter to specify the package URL (PURL) for the scanned artifact. |
+| `rl-diff-with` | No | If using a package store, use this parameter to specify the PURL of a previously scanned version of the artifact to compare (diff) against. The previous version must exist in the same project and package as the scanned artifact. |
+| `rl-verbose` | No | Set to`true` to provide more feedback in the output while running the scan. Disabled by default. |
+| `rl-proxy-server` | No | Server URL for proxy configuration (IP address or DNS name). |
+| `rl-proxy-port` | No | Network port on the proxy server for proxy configuration. Required if `rl-proxy-server` is used. |
+| `rl-proxy-user` | No | User name for proxy authentication. |
+| `rl-proxy-password` | No | Password for proxy authentication. Required if `rl-proxy-user` is used. |
 
 
 ### Outputs
@@ -94,6 +137,13 @@ The action creates the reports in directory: `${{ inputs.report-path }}`.
 
 Users can control the `report-path` as an input parameter.
 
+The `report-path` will now also hold the `RL-SAFE archive`.
+
+The [RL-SAFE archive](https://docs.secure.software/concepts/analysis-reports#rl-safe-archive)
+is a convenient way to get the full SAFE report and all other supported report formats for a software package in a single file.
+The archive can be freely shared and moved between different computers, and viewed without requiring a Spectra Assure product license.
+To open the archive and work with it, you need the [SAFE Viewer](https://docs.secure.software/safe-viewer) - a free, cross-platform tool developed by ReversingLabs.
+The RL-SAFE archive is named report.rl-safe and stored in `report-path`
 
 ## Examples
 
@@ -122,7 +172,7 @@ jobs:
 
     steps:
       # Need to check out data before we can do anything
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # Replace this with your build process
       # Need to produce one file as the build artifact in scanfile=<relative file path>
